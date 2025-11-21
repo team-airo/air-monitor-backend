@@ -1,17 +1,43 @@
 const express = require("express");
-const router = express.Router();
+const ControlState = require("../models/ControlState");
 
 module.exports = (broadcastToESP) => {
-  router.post("/fan", (req, res) => {
-    // console.log(`POST /api/control/fan - state: ${req.body.state}`);
-    broadcastToESP({ fan: req.body.state });
-    res.json({ success: true });
+  const router = express.Router();
+
+  router.post("/fan", async (req, res) => {
+    const state = req.body.state === "ON" ? "ON" : "OFF";
+
+    broadcastToESP({ fan: state });
+
+    const updated = await ControlState.findOneAndUpdate(
+      {},
+      { fan: state, updatedAt: new Date() },
+      { upsert: true, new: true },
+    );
+
+    res.json({ success: true, control: updated });
   });
 
-  router.post("/buzzer", (req, res) => {
-    // console.log(`POST /api/control/buzzer - state: ${req.body.state}`);
-    broadcastToESP({ buzzer: req.body.state });
-    res.json({ success: true });
+  router.post("/buzzer", async (req, res) => {
+    const state = req.body.state === "ON" ? "ON" : "OFF";
+
+    broadcastToESP({ buzzer: state });
+
+    const updated = await ControlState.findOneAndUpdate(
+      {},
+      { buzzer: state, updatedAt: new Date() },
+      { upsert: true, new: true },
+    );
+
+    res.json({ success: true, control: updated });
+  });
+
+  router.get("/", async (req, res) => {
+    const status = (await ControlState.findOne()) || {
+      fan: "OFF",
+      buzzer: "OFF",
+    };
+    res.json(status);
   });
 
   return router;

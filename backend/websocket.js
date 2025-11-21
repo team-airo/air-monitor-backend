@@ -6,7 +6,13 @@ const clients = new Set();
 function broadcastToESP(data) {
   const msg = JSON.stringify(data);
   clients.forEach((ws) => {
-    if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    if (ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(msg);
+      } catch (err) {
+        console.error("WS send error:", err);
+      }
+    }
   });
 }
 
@@ -14,9 +20,8 @@ function setupWebSocket(server) {
   const wss = new WebSocket.Server({ server, path: "/ws" });
 
   wss.on("connection", (ws) => {
-    console.log("WebSocket: client connected");
+    console.log("WS: client connected");
 
-    // Confirm connection
     ws.send(JSON.stringify({ message: "WS connection established" }));
     clients.add(ws);
 
@@ -25,23 +30,29 @@ function setupWebSocket(server) {
       try {
         data = JSON.parse(raw.toString());
       } catch {
-        console.log("WebSocket: invalid JSON received");
+        console.log("WS: invalid JSON");
         return;
       }
 
-      // Save sensor data to DB
       if (data.type === "sensor_data") {
         try {
-          await SensorData.create(data);
-        } catch (err) {
-          console.error("WebSocket: DB save error:", err);
+          await SensorData.create({
+            mq135: data.mq135,
+            mq7: data.mq7,
+            mq2: data.mq2,
+            danger: data.danger,
+            fan: data.fan,
+            buzzer: data.buzzer,
+          });
+        } catch (e) {
+          console.error("Error saving sensor data:", e);
         }
       }
     });
 
     ws.on("close", () => {
       clients.delete(ws);
-      console.log("WebSocket: client disconnected");
+      console.log("WS: client disconnected");
     });
   });
 
