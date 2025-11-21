@@ -1,7 +1,7 @@
 const WebSocket = require("ws");
 const SensorData = require("./models/SensorData");
 
-let clients = new Set();
+const clients = new Set();
 
 function broadcastToESP(data) {
   const msg = JSON.stringify(data);
@@ -14,23 +14,35 @@ function setupWebSocket(server) {
   const wss = new WebSocket.Server({ server, path: "/ws" });
 
   wss.on("connection", (ws) => {
-    console.log("ESP32 connected");
+    console.log("WebSocket: client connected");
+
+    // Confirm connection
+    ws.send(JSON.stringify({ message: "WS connection established" }));
     clients.add(ws);
 
-    ws.on("message", async (message) => {
+    ws.on("message", async (raw) => {
+      let data;
       try {
-        const json = JSON.parse(message.toString());
+        data = JSON.parse(raw.toString());
+      } catch {
+        console.log("WebSocket: invalid JSON received");
+        return;
+      }
 
-        if (json.type === "sensor_data") {
-          await SensorData.create(json);
-          console.log("Saved sensor data.");
+      // Save sensor data to DB
+      if (data.type === "sensor_data") {
+        try {
+          await SensorData.create(data);
+        } catch (err) {
+          console.error("WebSocket: DB save error:", err);
         }
-      } catch (err) {
-        console.log("WS Error:", err);
       }
     });
 
-    ws.on("close", () => clients.delete(ws));
+    ws.on("close", () => {
+      clients.delete(ws);
+      console.log("WebSocket: client disconnected");
+    });
   });
 
   return { broadcastToESP };
