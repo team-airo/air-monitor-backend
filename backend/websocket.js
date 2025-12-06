@@ -49,12 +49,10 @@ function setupWebSocket(server) {
           console.log("Device identified: ESP32 is ONLINE");
         }
 
-        // Broadcast sensor data to frontend
-        broadcastToClients(data);
-
-        // Save to DB
+        // Save to DB FIRST to get the timestamp
+        let savedRecord;
         try {
-          await SensorData.create({
+          savedRecord = await SensorData.create({
             mq135: data.mq135,
             mq7: data.mq7,
             mq2: data.mq2,
@@ -62,9 +60,19 @@ function setupWebSocket(server) {
             fan: data.fan,
             buzzer: data.buzzer,
           });
+          console.log(
+            "Data saved to DB with timestamp:",
+            savedRecord.timestamp,
+          );
         } catch (e) {
           console.error("DB Save Error:", e);
         }
+
+        // Broadcast sensor data WITH the database timestamp to prevent duplicates
+        broadcastToClients({
+          ...data,
+          timestamp: savedRecord ? savedRecord.timestamp : new Date(),
+        });
       }
 
       // Optional: Explicit registration from ESP32 (if you add this to C++ code)
